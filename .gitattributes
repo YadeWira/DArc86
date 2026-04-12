@@ -1,0 +1,4 @@
+*.hs text eol=lf
+HsLua/Setup.hs text eol=lf
+HsLua/src/Scripting/Lua.hs text eol=lf
+HsLua/tests/HsLuaMain.hs text eol=lf
