@@ -1,100 +1,72 @@
-# DArc
-Distended Arc - Based on FreeArc
+# DArc86
 
-## Overview
+**DArc86** is the 32-bit Windows port of [DArc](https://github.com/YadeWira/DArc) — a command-line archiver derived from [FreeArc](http://freearc.org) — targeted at legacy **Windows 7 / 8 / 10 (x86)** systems.
 
-DArc is a command-line (and optional GUI) archiver based on [FreeArc](http://freearc.org). It supports solid compression, strong encryption, recovery records, SFX archives, and a wide variety of compression algorithms.
+Built via **Wine + GHC 8.6.5 i386**, the last GHC bindist that supports 32-bit Windows. The resulting binary is `arc86.exe` (PE32, Intel i386).
 
-The console binary is named `arc` (Unix) or `Arc.exe` (Windows).  
-The optional GUI binary is named `freearc` (Unix) or `FreeArc.exe` (Windows).
+> The 64-bit variants (Linux x64 + Windows x64, built with MicroHs or GHC 9.4) live in the separate [DArc](https://github.com/YadeWira/DArc) repository.
+
+---
+
+## Archive format compatibility
+
+The wire format is **100% compatible** between DArc86, DArc (64-bit), and FreeArc 0.67:
+
+- Archives produced by DArc86 can be read by DArc, FreeArc 0.67 (32-bit legacy) and older.
+- Archives produced by DArc / FreeArc 0.67 can be read by DArc86.
+- For round-tripping with **FreeArc 0.67 32-bit legacy archives**, pass `--arc-32bit-legacy`.
 
 ---
 
 ## Building
 
-> **Note:** The main Haskell source files are stored in [Git LFS](https://git-lfs.github.com/).
-> Install `git-lfs` before cloning, or run `git lfs pull` after cloning, otherwise source files will be empty LFS pointer stubs.
+Cross-compilation from Linux via Wine is the supported path.
 
-> **Build System Overview:**
-> DArc uses MicroHs (a lightweight Haskell compiler) for the Haskell code and Clang for C/C++ components (compiled with C++17 standard). The build process automatically compiles all compression libraries, HsLua bindings, and links everything into the final executable.
+### Requirements
 
-### On Windows
+- **Wine** (tested with wine 9.x)
+- **GHC 8.6.5 Windows i386 bindist** installed under Wine at `~/.wine/drive_c/ghc865-i386/`
+  - Download: <https://downloads.haskell.org/~ghc/8.6.5/ghc-8.6.5-i386-unknown-mingw32.tar.xz>
+  - Extract with `tar -xf ghc-8.6.5-*.tar.xz -C ~/.wine/drive_c/ --strip-components=1` and rename to `ghc865-i386/`.
+- **i686-w64-mingw32** toolchain on the host (`g++-posix`, `objdump`, `objcopy`)
+  - Ubuntu/Debian: `sudo apt install mingw-w64 g++-mingw-w64-i686-posix`
+- **Lua 5.1 static library** built for i686 at `/tmp/out/FreeArc-win86-ghc/liblua5.1.a`
+  - The `compile-ghc-win86` script prints the exact build commands if this file is missing.
 
-1. Install [MSYS2](https://www.msys2.org/) with the `UCRT64` environment and ensure the MSYS2 binaries are in your `PATH` (specifically `sh.exe`, `clang`, `make`, `curl`, and `tar` should be available).
-   - The build scripts require `sh.exe` from MSYS2 or Git Bash to be accessible from the Windows command prompt.
-2. Install [MicroHs](https://github.com/augustss/MicroHs) (`mhs`) and add `%USERPROFILE%\.mcabal\bin` to your `PATH`.
-   - MicroHs is the Haskell compiler used for building DArc. No GHC installation is needed.
-3. Compile the console version (`Arc.exe`):
-   ```
-   compile-O2
-   ```
-   This will automatically build all necessary C/C++ components, HsLua, and the main executable.
-4. Compile the GUI version (`FreeArc.exe`):
-   ```
-   compile-GUI-O2
-   ```
-5. The compiled binaries are placed in the `Tests/` subdirectory.
-6. To compile SFX modules and Unarc (optional):
-   ```
-   cd Unarc
-   make windows
-   ```
-   This creates `unarc.exe` and various SFX modules (`arc.sfx`, `freearc.sfx`, etc.).
+### Build
 
-### On Unix (Linux/macOS)
+```bash
+./compile-ghc-win86
+```
 
-1. Install [MicroHs](https://github.com/augustss/MicroHs) (`mhs`) for Haskell compilation. Also install `clang`, `make`, and the following development libraries:
-   - **Required:** `liblua5.1-dev`, `libncurses-dev` (or `ncurses` on macOS via Homebrew)
-   - **Optional:** `libcurl-dev` (or `curl` on macOS) for URL/network archive support (auto-detected; the build succeeds without it)
-   - MicroHs is required by the build script; no GHC installation is needed.
-2. Make compile scripts executable (if needed):
-   ```bash
-   chmod +x compile*
-   ```
-3. Compile the console version (`arc`):
-   ```bash
-   ./compile-O2
-   ```
-   This will automatically build all necessary C/C++ components, HsLua, and the main executable.
-4. Compile the GUI version (`freearc`):
-   ```bash
-   ./compile-GUI-O2
-   ```
-5. The compiled binaries are placed in the `Tests/` subdirectory.
-6. To compile SFX modules and Unarc (optional):
-   ```bash
-   cd Unarc
-   make linux
-   ```
-   This creates `unarc` and various SFX modules (`arc.linux.sfx`, etc.).
+The script runs two GHC stages around an `objcopy` strip pass (see **Notes** below) and produces:
 
-### Troubleshooting
+```
+Tests/arc86.exe     # PE32 Intel 80386, Windows console binary
+```
 
-**Windows:**
-- **"sh.exe not found"**: Ensure MSYS2 is installed and its `bin` directory (e.g., `C:\msys64\usr\bin`) is in your system PATH.
-- **"mhs not found"**: Verify MicroHs is installed and `%USERPROFILE%\.mcabal\bin` is in your PATH. Run `mhs --version` to test.
-- **"clang not found"**: Install the UCRT64 toolchain in MSYS2: `pacman -S mingw-w64-ucrt-x86_64-clang mingw-w64-ucrt-x86_64-make`
-- **Compilation errors in C++ files**: Ensure you're using C++17 standard. The build scripts automatically set this via the makefiles.
+### Native Windows build (legacy)
 
-**Linux/macOS:**
-- **"mhs not found"**: Install MicroHs from [the official repository](https://github.com/augustss/MicroHs) and ensure it's in your PATH.
-- **"lua5.1 not found"**: Install Lua development libraries:
-  - Ubuntu/Debian: `sudo apt-get install liblua5.1-0-dev libncurses-dev`
-  - Fedora/RHEL: `sudo dnf install lua-devel ncurses-devel`
-  - macOS: `brew install lua@5.1 ncurses`
-- **"curl not found" (optional)**: Install libcurl development package or build without URL support (automatic).
-- **Permission errors**: Make sure compile scripts are executable: `chmod +x compile*`
+The `compile*.cmd` batch files are the original FreeArc native-Windows build scripts kept for reference. They assume an ancient GHC + Cygwin/MSYS environment and are not actively maintained — the Wine cross-build is the recommended path.
 
-**All Platforms:**
-- **Empty Haskell source files**: The Haskell sources use Git LFS. Run `git lfs pull` to download them.
-- **"No such file or directory" during compilation**: Verify all git submodules are initialized: `git submodule update --init --recursive`
+---
+
+## Notes on the build process
+
+GHC 8.6 i386 runs an incremental `ld -r` per Haskell module and bundles every `-optl` C object (together with its `.idata$*` sections) into the module that references it. The merged `.idata` then leaks into the final PE as a bogus 13th import descriptor, which causes Windows 7 to reject the binary with `STATUS_ENTRYPOINT_NOT_FOUND (0xC0000139)` at load time.
+
+`compile-ghc-win86` works around this by splitting the build in two stages:
+
+1. **Compile** (`ghc --make -c -no-link`) — produces all `.o` files in the temp dir but does not link.
+2. **Strip** — for every `.o` whose `objdump -h` shows any `.idata` section, run `i686-w64-mingw32-objcopy --remove-section='.idata$2' --remove-section='.idata$4' --remove-section='.idata$5' --remove-section='.idata$6' --remove-section='.idata$7'`.
+3. **Link** — re-invoke the same `ghc --make` line with `-o arc86.exe`. Since the sources are unchanged GHC skips compilation and proceeds straight to link, picking up the stripped `.o` files. The remaining `_imp__*` refs resolve cleanly from `libkernel32.a`, `libwininet.a`, etc., yielding a valid 12-descriptor PE import table.
 
 ---
 
 ## CLI Usage
 
 ```
-arc <command> [options...] <archive> [files... @listfiles...]
+arc86 <command> [options...] <archive> [files... @listfiles...]
 ```
 
 - **`<command>`** — one of the commands listed below.
@@ -103,9 +75,10 @@ arc <command> [options...] <archive> [files... @listfiles...]
 - **`[files...]`** — files or directories to process. Wildcards are supported. If omitted, all files are processed (`*`).
 - **`[@listfiles...]`** — text files containing lists of filenames to process, one per line.
 
-Multiple commands can be chained with `;` as a separator, for example:
+Multiple commands can be chained with `;` as a separator:
+
 ```
-arc "a archive -r ; t archive ; x archive"
+arc86 "a archive -r ; t archive ; x archive"
 ```
 
 ---
@@ -139,46 +112,31 @@ arc "a archive -r ; t archive ; x archive"
 
 ### Command Examples
 
-```sh
-# Add all files in the current directory recursively
-arc a archive.arc -r .
+```cmd
+rem Add all files recursively
+arc86 a archive.arc -r .
 
-# Extract all files from an archive
-arc x archive.arc
+rem Extract all files
+arc86 x archive.arc
 
-# Extract, ignoring directory paths
-arc e archive.arc
+rem Test archive integrity
+arc86 t archive.arc
 
-# Test archive integrity
-arc t archive.arc
+rem List archive contents
+arc86 l archive.arc
 
-# List archive contents
-arc l archive.arc
+rem Add a 5% recovery record
+arc86 rr archive.arc -rr5%
 
-# Delete a file from an archive
-arc d archive.arc unwanted.txt
-
-# Add a recovery record (5% of archive size)
-arc rr archive.arc -rr5%
-
-# Recover a damaged archive
-arc r archive.arc
-
-# Convert to self-extracting archive
-arc s archive.arc
-
-# Join multiple archives
-arc j output.arc part1.arc part2.arc
-
-# Lock archive (prevent modifications)
-arc k archive.arc
+rem Read a FreeArc 0.67 legacy 32-bit archive
+arc86 x --arc-32bit-legacy old067.arc
 ```
 
 ---
 
 ## Options
 
-Options use the short form `-<opt>` or long form `--<option>`.  
+Options use the short form `-<opt>` or long form `--<option>`.
 Options that take a parameter use `-<opt><value>` or `--<option>=<value>`.
 
 ### General
@@ -189,6 +147,7 @@ Options that take a parameter use `-<opt><value>` or `--<option>=<value>`.
 | `--`  |                   | Stop processing options |
 | `-cfg FILE` | `--config=FILE` | Use config FILE (default: `arc.ini`) |
 | `-env VAR`  |                 | Read default options from environment variable VAR (default: `FREEARC`) |
+|       | `--arc-32bit-legacy` | Read FreeArc 0.67 / legacy 32-bit archives |
 
 ### File Selection
 
@@ -219,7 +178,7 @@ Options that take a parameter use `-<opt><value>` or `--<option>=<value>`.
 
 | Short | Long              | Description |
 |-------|-------------------|-------------|
-| `-m METHOD` | `--method=METHOD` | Compression method (`-m0`–`-m9`, `-m1x`–`-m9x`) |
+| `-m METHOD` | `--method=METHOD` | Compression method (`-m0`–`-m9`, `-m1x`–`-m9x`, `-mbsc`, `-mzstd`, `-mdispack`, `-mlzma2`, `-m7z`) |
 | `-dm METHOD` | `--dirmethod=METHOD` | Compression method for archive directory |
 | `-md N` | `--dictionary=N` | Set compression dictionary to N MB |
 | `-ms`  | `--StoreCompressed` | Store already-compressed files without recompression |
@@ -234,6 +193,8 @@ Options that take a parameter use `-<opt><value>` or `--<option>=<value>`.
 | `--groups=FILE` |            | Name of file-groups definition file |
 | `-lc N` | `--LimitCompMem=N` | Limit memory for compression to N MB |
 | `-ld N` | `--LimitDecompMem=N` | Limit memory for decompression to N MB |
+
+> **Memory note**: because `arc86.exe` is a 32-bit process, total addressable memory is capped at ~2 GB (or ~4 GB with `/LARGEADDRESSAWARE` on Win64 hosts). Very large dictionaries (`-md 1g+`) or deep solid blocks may hit this ceiling; prefer DArc x64 for that workload.
 
 #### Compression Levels
 
@@ -291,6 +252,7 @@ Options that take a parameter use `-<opt><value>` or `--<option>=<value>`.
 | `-tl` | `--timetolast`    | Set archive time to the latest file's modification time |
 | `--dirs` |                  | Add empty directories to archive |
 | `-ed` | `--nodirs`        | Do not add empty directories to archive |
+| `--nodates` |              | Do not store file modification dates in archive |
 
 ### Windows-Only Options
 
@@ -308,7 +270,7 @@ Options that take a parameter use `-<opt><value>` or `--<option>=<value>`.
 | `--logfile=FILE` |          | Duplicate all output to FILE |
 | `--print-config` |          | Display built-in compression method definitions |
 
-### Network/URL Options
+### Network/URL Options (WinInet)
 
 | Long              | Description |
 |-------------------|-------------|
@@ -329,7 +291,7 @@ Options that take a parameter use `-<opt><value>` or `--<option>=<value>`.
 
 ## Configuration File (`arc.ini`)
 
-By default, DArc reads options from `arc.ini` in standard search paths. You can override the config file with `-cfg <file>` or disable it with `-cfg-`.
+By default, DArc86 reads options from `arc.ini` in standard search paths. You can override the config file with `-cfg <file>` or disable it with `-cfg-`.
 
 **Default options** can be set per-command in the `[Default options]` section:
 
@@ -349,45 +311,47 @@ The `FREEARC` environment variable is also read for default options (override wi
 
 You can pass a file containing a list of filenames (one per line) to any command by prefixing the filename with `@`:
 
-```sh
-arc a archive.arc @myfiles.txt
+```cmd
+arc86 a archive.arc @myfiles.txt
 ```
 
 ---
 
 ## Examples
 
-```sh
-# Create archive with maximum compression
-arc a -mx myarchive.arc documents/
+```cmd
+rem Create archive with maximum compression
+arc86 a -mx myarchive.arc documents\
 
-# Create encrypted archive
-arc a -p"my secret" secure.arc private/
+rem Create encrypted archive
+arc86 a -p"my secret" secure.arc private\
 
-# Extract archive to a specific directory
-arc x archive.arc -dp /home/user/extracted/
+rem Extract archive to a specific directory
+arc86 x archive.arc -dp C:\Users\me\extracted\
 
-# Add recovery record (10% of archive size)
-arc ch myarchive.arc -rr10%
+rem Add recovery record (10% of archive size)
+arc86 ch myarchive.arc -rr10%
 
-# List archive contents verbosely
-arc v myarchive.arc
+rem Update archive with changed files
+arc86 u myarchive.arc documents\
 
-# Update archive with changed files
-arc u myarchive.arc documents/
+rem Compress with BSC
+arc86 a -mbsc myarchive.arc text\
 
-# Create self-extracting archive
-arc s myarchive.arc
+rem Compress with zstd level 9
+arc86 a -mzstd:9 myarchive.arc data\
 
-# Freshen archive, then test it
-arc a archive.arc -r src/ -t
-
-# Compress with specific algorithm and dictionary size
-arc a -m4 -md128m myarchive.arc bigfiles/
-
-# Exclude certain file types
-arc a myarchive.arc docs/ -x"*.tmp" -x"*.log"
+rem List contents of a FreeArc 0.67 legacy archive
+arc86 l --arc-32bit-legacy old067.arc
 ```
+
+---
+
+## Known limitations
+
+- **2 GB process memory cap** (32-bit). For large dictionaries or big solid blocks, use the 64-bit DArc build.
+- No GUI variant — `arc86.exe` is console-only. The FreeArc GUI front-end is not ported.
+- The `max` compression mode relies on external tools (`precomp`, `ecm`, `ppmonstr`) that must be present in `PATH`.
 
 ---
 
