@@ -1,71 +1,396 @@
-# DArc86
+# DArc
+Distended Arc - Based on FreeArc
 
-Legacy Windows 7/8/10 x86 (32-bit) archiver based on FreeArc. A standalone
-build targeting `i386` Windows, compiled with GHC 8.6.5 (the last GHC with
-an official Windows i386 bindist) linked against the msvcrt C runtime.
+## Overview
 
-Output binary: `Tests/arc86.exe` (PE32 Intel 80386).
+DArc is a command-line (and optional GUI) archiver based on [FreeArc](http://freearc.org). It supports solid compression, strong encryption, recovery records, SFX archives, and a wide variety of compression algorithms.
 
-Archive format is compatible with other FreeArc-derived archivers.
+The console binary is named `arc` (Unix) or `Arc.exe` (Windows).  
+The optional GUI binary is named `freearc` (Unix) or `FreeArc.exe` (Windows).
 
 ---
 
-## Building (cross-compile from Linux via Wine)
+## Building
 
-### Requirements
+> **Note:** The main Haskell source files are stored in [Git LFS](https://git-lfs.github.com/).
+> Install `git-lfs` before cloning, or run `git lfs pull` after cloning, otherwise source files will be empty LFS pointer stubs.
 
-- `wine` (tested on Wine 11.x)
-- GHC 8.6.5 Windows i386 bindist installed at `~/.wine/drive_c/ghc865-i386/`  
-  Download: https://downloads.haskell.org/~ghc/8.6.5/ghc-8.6.5-i386-unknown-mingw32.tar.xz  
-  Extract with `tar --strip-components=1 -xf` into `~/.wine/drive_c/ghc865-i386/`.
-- Lua 5.1 static library built for i686 msvcrt, placed at  
-  `/tmp/out/FreeArc-win86-ghc/liblua5.1.a`.  
-  Build it by running the bundled gcc under Wine:
-  ```sh
-  cd /path/to/lua-5.1.5/src
-  for s in *.c; do
-    [[ "$s" =~ ^(lua|luac|print)\.c$ ]] && continue
-    wine ~/.wine/drive_c/ghc865-i386/mingw/bin/gcc.exe -c -O2 "$s" -o "${s%.c}.o"
-  done
-  wine ~/.wine/drive_c/ghc865-i386/mingw/bin/ar.exe rcs liblua5.1.a \
-    lapi.o lauxlib.o lbaselib.o lcode.o ldblib.o ldebug.o ldo.o ldump.o \
-    lfunc.o lgc.o linit.o liolib.o llex.o lmathlib.o lmem.o loadlib.o \
-    lobject.o lopcodes.o loslib.o lparser.o lstate.o lstring.o lstrlib.o \
-    ltable.o ltablib.o ltm.o lundump.o lvm.o lzio.o
-  mkdir -p /tmp/out/FreeArc-win86-ghc
-  cp liblua5.1.a /tmp/out/FreeArc-win86-ghc/
-  ```
+> **Build System Overview:**
+> DArc uses MicroHs (a lightweight Haskell compiler) for the Haskell code and Clang for C/C++ components (compiled with C++17 standard). The build process automatically compiles all compression libraries, HsLua bindings, and links everything into the final executable.
 
-### Compile
+### On Windows
 
-```sh
-./compile-ghc-win86
+1. Install [MSYS2](https://www.msys2.org/) with the `UCRT64` environment and ensure the MSYS2 binaries are in your `PATH` (specifically `sh.exe`, `clang`, `make`, `curl`, and `tar` should be available).
+   - The build scripts require `sh.exe` from MSYS2 or Git Bash to be accessible from the Windows command prompt.
+2. Install [MicroHs](https://github.com/augustss/MicroHs) (`mhs`) and add `%USERPROFILE%\.mcabal\bin` to your `PATH`.
+   - MicroHs is the Haskell compiler used for building DArc. No GHC installation is needed.
+3. Compile the console version (`Arc.exe`):
+   ```
+   compile-O2
+   ```
+   This will automatically build all necessary C/C++ components, HsLua, and the main executable.
+4. Compile the GUI version (`FreeArc.exe`):
+   ```
+   compile-GUI-O2
+   ```
+5. The compiled binaries are placed in the `Tests/` subdirectory.
+6. To compile SFX modules and Unarc (optional):
+   ```
+   cd Unarc
+   make windows
+   ```
+   This creates `unarc.exe` and various SFX modules (`arc.sfx`, `freearc.sfx`, etc.).
+
+### On Unix (Linux/macOS)
+
+1. Install [MicroHs](https://github.com/augustss/MicroHs) (`mhs`) for Haskell compilation. Also install `clang`, `make`, and the following development libraries:
+   - **Required:** `liblua5.1-dev`, `libncurses-dev` (or `ncurses` on macOS via Homebrew)
+   - **Optional:** `libcurl-dev` (or `curl` on macOS) for URL/network archive support (auto-detected; the build succeeds without it)
+   - MicroHs is required by the build script; no GHC installation is needed.
+2. Make compile scripts executable (if needed):
+   ```bash
+   chmod +x compile*
+   ```
+3. Compile the console version (`arc`):
+   ```bash
+   ./compile-O2
+   ```
+   This will automatically build all necessary C/C++ components, HsLua, and the main executable.
+4. Compile the GUI version (`freearc`):
+   ```bash
+   ./compile-GUI-O2
+   ```
+5. The compiled binaries are placed in the `Tests/` subdirectory.
+6. To compile SFX modules and Unarc (optional):
+   ```bash
+   cd Unarc
+   make linux
+   ```
+   This creates `unarc` and various SFX modules (`arc.linux.sfx`, etc.).
+
+### Troubleshooting
+
+**Windows:**
+- **"sh.exe not found"**: Ensure MSYS2 is installed and its `bin` directory (e.g., `C:\msys64\usr\bin`) is in your system PATH.
+- **"mhs not found"**: Verify MicroHs is installed and `%USERPROFILE%\.mcabal\bin` is in your PATH. Run `mhs --version` to test.
+- **"clang not found"**: Install the UCRT64 toolchain in MSYS2: `pacman -S mingw-w64-ucrt-x86_64-clang mingw-w64-ucrt-x86_64-make`
+- **Compilation errors in C++ files**: Ensure you're using C++17 standard. The build scripts automatically set this via the makefiles.
+
+**Linux/macOS:**
+- **"mhs not found"**: Install MicroHs from [the official repository](https://github.com/augustss/MicroHs) and ensure it's in your PATH.
+- **"lua5.1 not found"**: Install Lua development libraries:
+  - Ubuntu/Debian: `sudo apt-get install liblua5.1-0-dev libncurses-dev`
+  - Fedora/RHEL: `sudo dnf install lua-devel ncurses-devel`
+  - macOS: `brew install lua@5.1 ncurses`
+- **"curl not found" (optional)**: Install libcurl development package or build without URL support (automatic).
+- **Permission errors**: Make sure compile scripts are executable: `chmod +x compile*`
+
+**All Platforms:**
+- **Empty Haskell source files**: The Haskell sources use Git LFS. Run `git lfs pull` to download them.
+- **"No such file or directory" during compilation**: Verify all git submodules are initialized: `git submodule update --init --recursive`
+
+---
+
+## CLI Usage
+
+```
+arc <command> [options...] <archive> [files... @listfiles...]
 ```
 
-This runs `./compile-win86-c` first (C/C++ objects via GHC 8.6's bundled
-mingw gcc 7.2.0 under Wine), builds `Win32Files.o` and `ntrljmp.o`, then
-invokes GHC 8.6 under Wine to compile the Haskell side and link
-`Tests/arc86.exe`.
+- **`<command>`** — one of the commands listed below.
+- **`[options...]`** — zero or more options (each prefixed with `-`).
+- **`<archive>`** — path to the archive file. The default extension `.arc` is added automatically unless `--noarcext` is used.
+- **`[files...]`** — files or directories to process. Wildcards are supported. If omitted, all files are processed (`*`).
+- **`[@listfiles...]`** — text files containing lists of filenames to process, one per line.
 
-### Runtime
-
-`arc86.exe` depends on these DLLs (copy them next to the exe for
-distribution):
-
-- `libstdc++-6.dll`
-- `libwinpthread-1.dll`
-- `libgcc_s_dw2-1.dll`
-
-All three are in `~/.wine/drive_c/ghc865-i386/mingw/bin/`.
-
-The archiver also reads `arc.ini` and `arc.groups` at startup
-(`Installer/bin/arc.ini` and `Installer/bin/arc.groups` in this repo).
+Multiple commands can be chained with `;` as a separator, for example:
+```
+arc "a archive -r ; t archive ; x archive"
+```
 
 ---
 
-## Why GHC 8.6.5?
+## Commands
 
-GHC 8.6.5 is the last official GHC release with a Windows i386 (32-bit)
-bindist. Later GHC versions dropped the i386 target and moved to UCRT.
-This project targets msvcrt specifically so the resulting binary runs on
-stock Windows 7/8/10 without the Universal C Runtime.
+| Command   | Description |
+|-----------|-------------|
+| `a`       | Add files to archive |
+| `c`       | Add comment to archive |
+| `ch`      | Modify archive (recompress, encrypt, etc.) |
+| `create`  | Create new archive |
+| `cw`      | Write archive comment to file |
+| `d`       | Delete files from archive |
+| `e`       | Extract files from archive, ignoring pathnames |
+| `f`       | Freshen archive (update files that are newer on disk) |
+| `j`       | Join archives |
+| `k`       | Lock archive |
+| `l`       | List files in archive |
+| `lb`      | Bare list of files in archive (filenames only) |
+| `lt`      | Technical archive listing |
+| `m`       | Move files and directories to archive |
+| `mf`      | Move only files to archive |
+| `r`       | Recover archive using recovery record |
+| `rr`      | Add recovery record to archive |
+| `s`       | Convert archive to SFX (self-extracting) |
+| `t`       | Test archive integrity |
+| `u`       | Update files in archive |
+| `v`       | Verbosely list files in archive |
+| `x`       | Extract files from archive (preserving paths) |
+
+### Command Examples
+
+```sh
+# Add all files in the current directory recursively
+arc a archive.arc -r .
+
+# Extract all files from an archive
+arc x archive.arc
+
+# Extract, ignoring directory paths
+arc e archive.arc
+
+# Test archive integrity
+arc t archive.arc
+
+# List archive contents
+arc l archive.arc
+
+# Delete a file from an archive
+arc d archive.arc unwanted.txt
+
+# Add a recovery record (5% of archive size)
+arc rr archive.arc -rr5%
+
+# Recover a damaged archive
+arc r archive.arc
+
+# Convert to self-extracting archive
+arc s archive.arc
+
+# Join multiple archives
+arc j output.arc part1.arc part2.arc
+
+# Lock archive (prevent modifications)
+arc k archive.arc
+```
+
+---
+
+## Options
+
+Options use the short form `-<opt>` or long form `--<option>`.  
+Options that take a parameter use `-<opt><value>` or `--<option>=<value>`.
+
+### General
+
+| Short | Long              | Description |
+|-------|-------------------|-------------|
+| `-y`  | `--yes`           | Answer Yes to all queries |
+| `--`  |                   | Stop processing options |
+| `-cfg FILE` | `--config=FILE` | Use config FILE (default: `arc.ini`) |
+| `-env VAR`  |                 | Read default options from environment variable VAR (default: `FREEARC`) |
+
+### File Selection
+
+| Short | Long              | Description |
+|-------|-------------------|-------------|
+| `-r`  | `--recursive`     | Recursively collect files from subdirectories |
+| `-x FILESPECS` | `--exclude=FILESPECS` | Exclude matching files from operation |
+| `-n FILESPECS` | `--include=FILESPECS` | Include only files matching FILESPECS |
+| `-ep MODE` | `--ExcludePath=MODE` | Exclude/expand path (1, 2, or 3) |
+| `-fn` | `--fullnames`     | Match filespecs against full file paths |
+| `-sm SIZE` | `--SizeMore=SIZE` | Select files larger than SIZE |
+| `-sl SIZE` | `--SizeLess=SIZE` | Select files smaller than SIZE |
+| `-tb TIME` | `--TimeBefore=TIME` | Select files modified before TIME |
+| `-ta TIME` | `--TimeAfter=TIME`  | Select files modified after TIME |
+| `-tn PERIOD` | `--TimeNewer=PERIOD` | Select files newer than PERIOD |
+| `-to PERIOD` | `--TimeOlder=PERIOD` | Select files older than PERIOD |
+
+### Paths
+
+| Short | Long              | Description |
+|-------|-------------------|-------------|
+| `-ap DIR` | `--arcpath=DIR`  | Base directory inside archive |
+| `-dp DIR` | `--diskpath=DIR` | Base directory on disk |
+| `-ad`  | `--adddir`        | Add archive name to extraction path |
+| `-w DIR` | `--workdir=DIR`  | Directory for temporary files |
+
+### Compression
+
+| Short | Long              | Description |
+|-------|-------------------|-------------|
+| `-m METHOD` | `--method=METHOD` | Compression method (`-m0`–`-m9`, `-m1x`–`-m9x`) |
+| `-dm METHOD` | `--dirmethod=METHOD` | Compression method for archive directory |
+| `-md N` | `--dictionary=N` | Set compression dictionary to N MB |
+| `-ms`  | `--StoreCompressed` | Store already-compressed files without recompression |
+| `-mt N` | `--MultiThreaded=N` | Number of compression threads |
+| `-mc`  |                   | Disable specific compression algorithms (e.g., `-mcd-`, `-mc-rep`) |
+| `-mm MODE` | `--multimedia=MODE` | Multimedia compression mode |
+| `-ma LEVEL` |               | File-type auto-detection level (0–9, `+`, `-`) |
+| `-mx`  |                   | Maximum internal compression mode |
+| `-max` |                   | Maximum compression (uses external tools: precomp, ecm, ppmonstr) |
+| `-s GROUPING` | `--solid=GROUPING` | Solid compression grouping |
+| `-ds ORDER` | `--sort=ORDER`   | Sort files in ORDER before compressing |
+| `--groups=FILE` |            | Name of file-groups definition file |
+| `-lc N` | `--LimitCompMem=N` | Limit memory for compression to N MB |
+| `-ld N` | `--LimitDecompMem=N` | Limit memory for decompression to N MB |
+
+#### Compression Levels
+
+| Option | Description |
+|--------|-------------|
+| `-m0`  | No compression (store only) |
+| `-m1`–`-m9` | Compression levels 1–9 (increasing compression/time) |
+| `-m1x`–`-m9x` | Extra-mode compression at levels 1–9 |
+| `-mx` or `-max` | Maximum compression |
+
+#### Solid Grouping Values (`-s`)
+
+| Value | Description |
+|-------|-------------|
+| _(empty)_ | All files in one solid block |
+| `-` | No solid compression |
+| `e` | Group by file extension |
+| `s<size>` | Group by block size |
+
+### Encryption
+
+| Short | Long              | Description |
+|-------|-------------------|-------------|
+| `-p PASSWORD` | `--password=PASSWORD` | Encrypt/decrypt data with PASSWORD |
+| `-hp PASSWORD` | `--HeadersPassword=PASSWORD` | Encrypt/decrypt archive headers and data |
+| `-ae ALGO` | `--encryption=ALGO` | Encryption algorithm: `aes` (default), `blowfish`, `serpent`, `twofish` |
+| `-kf FILE` | `--keyfile=FILE`  | Encrypt/decrypt using KEYFILE |
+| `-op PASSWORD` | `--OldPassword=PASSWORD` | Old password used only for decryption |
+| `-okf FILE` | `--OldKeyfile=FILE` | Old keyfile used only for decryption |
+
+### Archive Management
+
+| Short | Long              | Description |
+|-------|-------------------|-------------|
+| `-f`  | `--freshen`       | Update only files that are newer on disk |
+| `-u`  | `--update`        | Update only files not present or newer on disk |
+| `--sync` |                | Synchronize archive and disk contents |
+| `-o MODE` | `--overwrite=MODE` | Overwrite mode: `+` (always), `-` (never), `p` (prompt) |
+| `-k`  | `--lock`          | Lock archive to prevent modifications |
+| `-rr SIZE` | `--recovery=SIZE` | Add recovery information of SIZE to archive |
+| `-sfx MODULE` |            | Add SFX module (`freearc.sfx` by default) |
+| `--noarcext` |              | Do not add the default `.arc` extension to archive name |
+| `-ag FMT` | `--autogenerate=FMT` | Autogenerate archive name using a time format string |
+| `--recompress` |            | Force recompression of all files |
+| `--append` |                | Add new files to the end of archive only |
+| `-z FILE` | `--arccmt=FILE` | Read archive comment from FILE or stdin |
+| `--archive-comment=TEXT` |  | Specify archive comment directly on the command line |
+| `-t`  | `--test`          | Test archive integrity after archiving |
+| `-tp MODE` | `--pretest=MODE` | Test archive before operation (0=none, 1=recovery only, 2=recovery or full, 3=full) |
+| `-d`  | `--delete`        | Delete files and directories after successful archiving |
+| `-df` | `--delfiles`      | Delete only files after successful archiving |
+| `-kb` | `--keepbroken`    | Keep broken extracted files |
+| `-ba MODE` | `--BrokenArchive=MODE` | Handle badly broken archives (`-`, `0`, or `1`) |
+| `-tk` | `--keeptime`      | Keep original archive modification time |
+| `-tl` | `--timetolast`    | Set archive time to the latest file's modification time |
+| `--dirs` |                  | Add empty directories to archive |
+| `-ed` | `--nodirs`        | Do not add empty directories to archive |
+
+### Windows-Only Options
+
+| Short | Long              | Description |
+|-------|-------------------|-------------|
+| `-ac` | `--ClearArchiveBit` | Clear Archive attribute on successfully (de)archived files |
+| `-ao` | `--SelectArchiveBit` | Select only files with Archive attribute set |
+
+### Display and Logging
+
+| Short | Long              | Description |
+|-------|-------------------|-------------|
+| `-i TYPE` | `--indicator=TYPE` | Progress indicator type: `0` (none), `1` (default), `2` (per-file) |
+| `-di AMOUNT` | `--display=AMOUNT` | Control amount of information displayed |
+| `--logfile=FILE` |          | Duplicate all output to FILE |
+| `--print-config` |          | Display built-in compression method definitions |
+
+### Network/URL Options
+
+| Long              | Description |
+|-------------------|-------------|
+| `--proxy=PROXY`   | Set proxy server(s) for URL access |
+| `--bypass=LIST`   | Set proxy bypass list for URL access |
+| `--original=URL`  | Re-download broken archive parts from URL |
+| `--save-bad-ranges=FILE` | Save list of broken archive parts to FILE |
+| `--cache=N`       | Use N MB for read-ahead cache |
+
+### Charset
+
+| Short | Long              | Description |
+|-------|-------------------|-------------|
+| `-sc CHARSETS` | `--charset=CHARSETS` | Character sets for list files and comment files |
+| `--language=FILE` |          | Load localization strings from FILE |
+
+---
+
+## Configuration File (`arc.ini`)
+
+By default, DArc reads options from `arc.ini` in standard search paths. You can override the config file with `-cfg <file>` or disable it with `-cfg-`.
+
+**Default options** can be set per-command in the `[Default options]` section:
+
+```ini
+[Default options]
+a = --display
+ch = -m4x -ms
+```
+
+**Compression methods** can be defined in the `[Compression methods]` section.
+
+The `FREEARC` environment variable is also read for default options (override with `-env <VAR>` or disable with `-env-`).
+
+---
+
+## List Files
+
+You can pass a file containing a list of filenames (one per line) to any command by prefixing the filename with `@`:
+
+```sh
+arc a archive.arc @myfiles.txt
+```
+
+---
+
+## Examples
+
+```sh
+# Create archive with maximum compression
+arc a -mx myarchive.arc documents/
+
+# Create encrypted archive
+arc a -p"my secret" secure.arc private/
+
+# Extract archive to a specific directory
+arc x archive.arc -dp /home/user/extracted/
+
+# Add recovery record (10% of archive size)
+arc ch myarchive.arc -rr10%
+
+# List archive contents verbosely
+arc v myarchive.arc
+
+# Update archive with changed files
+arc u myarchive.arc documents/
+
+# Create self-extracting archive
+arc s myarchive.arc
+
+# Freshen archive, then test it
+arc a archive.arc -r src/ -t
+
+# Compress with specific algorithm and dictionary size
+arc a -m4 -md128m myarchive.arc bigfiles/
+
+# Exclude certain file types
+arc a myarchive.arc docs/ -x"*.tmp" -x"*.log"
+```
+
+---
+
+## License
+
+See [LICENSE](LICENSE) for details.

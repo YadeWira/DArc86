@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Cross-compile DArc86 (Win32 i386 archiver for legacy Windows 7/8/10) via
-# Wine + GHC 8.6.5 Windows i386 bindist. GHC 8.6.5 is the last GHC release
-# with an official Windows i386 bindist (msvcrt-based).
+# Cross-compile DArc86 (Win32 variant) via Wine + GHC 8.6.5 Windows i386 bindist.
+# DArc86 is a SEPARATE build target for legacy Win7/8/10 32-bit users. It uses
+# GHC 8.6.5 (the last Windows i386 bindist) in isolation — the mainline DArc
+# Linux x64 and Win64 builds (GHC 9.4.8 / MHS) are untouched.
+#
+# Archive wire-format is 100% compatible between DArc and DArc86.
 #
 # Requirements:
 #   - wine
 #   - GHC 8.6.5 Windows i386 installed at ~/.wine/drive_c/ghc865-i386/
+#   - i686-w64-mingw32-g++-posix on host
 #   - Lua 5.1 static lib built for i686 at /tmp/out/FreeArc-win86-ghc/liblua5.1.a
 # Output: Tests/arc86.exe (PE32 Windows i386 binary)
 set -e
@@ -84,6 +88,18 @@ c_objs=(
   "$WINOUT/C_Encryption.o"
   "$WINOUT/Win32Files.o"
   "$WINOUT/ntrljmp.o"
+  "$WINOUT/LzmaEnc.o" "$WINOUT/LzmaDec.o" "$WINOUT/Lzma2Enc.o" "$WINOUT/Lzma2Dec.o"
+  "$WINOUT/LzFind.o" "$WINOUT/LzFindMt.o" "$WINOUT/LzFindOpt.o"
+  "$WINOUT/CpuArch.o" "$WINOUT/Alloc.o" "$WINOUT/Threads.o"
+  "$WINOUT/MtCoder.o" "$WINOUT/MtDec.o" "$WINOUT/7zStream.o"
+  "$WINOUT/C_7z.o"
+  "$WINOUT/sdk_7zArcIn.o" "$WINOUT/sdk_7zBuf.o" "$WINOUT/sdk_7zCrc.o"
+  "$WINOUT/sdk_7zCrcOpt.o" "$WINOUT/sdk_7zDec.o" "$WINOUT/sdk_7zFile.o"
+  "$WINOUT/sdk_7zStream.o" "$WINOUT/sdk_7zAlloc.o"
+  "$WINOUT/sdk_Bcj2.o" "$WINOUT/sdk_Bra.o" "$WINOUT/sdk_Bra86.o" "$WINOUT/sdk_BraIA64.o"
+  "$WINOUT/sdk_Delta.o" "$WINOUT/sdk_LzmaDec.o" "$WINOUT/sdk_Lzma2Dec.o"
+  "$WINOUT/sdk_Ppmd7.o" "$WINOUT/sdk_Ppmd7Dec.o"
+  "$WINOUT/sdk_CpuArch.o" "$WINOUT/sdk_Alloc.o"
 )
 [[ -f "$WINOUT/C_BCJ.o" ]] && c_objs+=("$WINOUT/C_BCJ.o")
 
@@ -104,7 +120,9 @@ ghc_ext_flags=(
 # GHC 8.6 on Windows i386 MERGES -optl C objects into per-module Haskell .o via
 # incremental `ld -r`. Passing them again to -optl for the final link causes
 # duplicate-symbol errors. Pass them only via -pgmlo/-optl-r once so GHC's link
-# sees them exactly once.
+# sees them exactly once. NOTE: this pollutes the final PE import table with a
+# 13th bogus ADVAPI32 descriptor containing KERNEL32/WININET/USER32 thunks —
+# `fix-arc86-imports.py` runs post-link to split that descriptor properly.
 optl_args=()
 for o in "${c_objs[@]}"; do
   optl_args+=(-optl "$(winpath "$(readlink -f "$o")")")
@@ -124,6 +142,38 @@ export WINEPATH="C:\\ghc865-i386\\mingw\\bin"
 
 cd "$DARC_DIR"
 
+# Stage 1: --make + compile only (-c). This produces all .o files in $htempdir but
+# does NOT link. Then we strip .idata sections from the polluted .o files (the ones
+# where GHC's per-module `ld -r` bundled C objects with their import descriptors
+# inside). Stripping forces the final link to resolve _imp_* refs from libkernel32.a
+# etc., yielding a clean PE import table without the bogus ADVAPI32 descriptor that
+# trips the Win7 loader (STATUS_ENTRYPOINT_NOT_FOUND).
+wine "$GHC_WIN_ROOT/bin/ghc.exe" \
+  -i. -iCompression -iHsLua/src -icompat-win \
+  -odir "$HTEMP_WIN" -hidir "$HTEMP_WIN" \
+  $opt -threaded \
+  "${hs_defines[@]}" \
+  "${optc_args[@]}" \
+  "${ghc_ext_flags[@]}" \
+  -fno-warn-deprecated-flags -w \
+  "${optl_args[@]}" \
+  --make Arc.hs \
+  -main-is Arc \
+  -c -no-link 2>/tmp/ghc86.err | tr -d '\000'
+cat /tmp/ghc86.err | tr -d '\000' | grep -vE "^[0-9a-f]+:fixme:|^[0-9a-f]+:stub|server_get_file_info|NtQuerySystemInformation" || true
+
+# Strip .idata$* sections from any Haskell .o that absorbed them via ld -r.
+for o in $(find "$htempdir" -name "*.o"); do
+  if i686-w64-mingw32-objdump -h "$o" 2>/dev/null | grep -q '\.idata'; then
+    i686-w64-mingw32-objcopy \
+      --remove-section='.idata$2' --remove-section='.idata$4' \
+      --remove-section='.idata$5' --remove-section='.idata$6' \
+      --remove-section='.idata$7' "$o"
+  fi
+done
+
+# Stage 2: link. Re-invoke GHC --make; with all .o present and source unchanged,
+# it skips compile and proceeds straight to link, picking up the stripped .o files.
 wine "$GHC_WIN_ROOT/bin/ghc.exe" \
   -i. -iCompression -iHsLua/src -icompat-win \
   -odir "$HTEMP_WIN" -hidir "$HTEMP_WIN" \

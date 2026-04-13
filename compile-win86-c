@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Build all C/C++ objects for Windows x86 (32-bit) target using GHC 8.6.5's
-# BUNDLED mingw (gcc 7.2.0, msvcrt-based) via Wine. Ubuntu's mingw-w64 13.x
-# targets UCRT exclusively, whereas GHC 8.6 expects msvcrt — mismatched CRT
-# causes link-time failures (__acrt_iob_func, _utime32, etc.). Running the
-# bundled gcc via Wine is slower but is the only way to get matching msvcrt
-# objects.
+# BUNDLED mingw (gcc 7.2.0, msvcrt-based) via Wine. We cannot use Ubuntu's
+# mingw-w64 because it targets UCRT exclusively, whereas GHC 8.6 expects
+# msvcrt — mismatched CRT causes link-time failures (__acrt_iob_func,
+# _utime32, etc.). Running the bundled gcc via Wine is slower but is the
+# only way to get matching msvcrt objects.
+# DOES NOT define __MHS__ or FREEARC_64BIT.
 set -e
 WINOUT=${WINOUT:-/tmp/out/FreeArc-win86-ghc}
 GHC_WIN_ROOT="${GHC_WIN_ROOT:-$HOME/.wine/drive_c/ghc865-i386}"

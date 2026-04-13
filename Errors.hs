@@ -134,6 +134,22 @@ shutdown msg exitCode = do
     ignoreErrors$ hFlush stdout
     ignoreErrors$ hFlush stderr
 
+    -- FreeArc 0.67 --shutdown: turn off computer when done
+    whenM (val perform_shutdown) $ ignoreErrors powerOffComputer
+
+    -- FreeArc 0.67 --pause-before-exit: optionally pause for the user
+    pbe <- val pause_before_exit_mode
+    let should_pause = case pbe of
+          "on"          -> True
+          "on-warnings" -> w > 0 || exitCode /= aEXIT_CODE_SUCCESS
+          "on-error"    -> exitCode /= aEXIT_CODE_SUCCESS
+          _             -> False
+    when should_pause $ ignoreErrors $ do
+      putStr "Press Enter to exit..."
+      hFlush stdout
+      _ <- getLine
+      return ()
+
   -- And finally - exit program!
   exit (exitCode  |||  (w &&& aEXIT_CODE_WARNINGS))
 #if 0
@@ -193,6 +209,16 @@ operationTerminated = unsafePerformIO (ref False)
 -- |Предотвращает повторное выполнение финализации после паузы
 programFinished = unsafePerformIO (ref False)
 {-# NOINLINE programFinished #-}
+
+-- |FreeArc 0.67 --shutdown: выключить компьютер после завершения операции
+perform_shutdown = unsafePerformIO (ref False)
+{-# NOINLINE perform_shutdown #-}
+
+pause_before_exit_mode = unsafePerformIO (ref "off")
+{-# NOINLINE pause_before_exit_mode #-}
+
+foreign import ccall unsafe "PowerOffComputer"
+  powerOffComputer :: IO ()
 
 -- |Режим работы файл-менеджера: при этом registerError обрабатывается по-другому - мы дожидаемся завершения всех тредов упаковки и распаковки
 fileManagerMode = unsafePerformIO (ref False)

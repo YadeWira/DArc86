@@ -64,6 +64,7 @@ import Foreign.Ptr
 import Foreign.Marshal.Utils
 import Foreign.Storable
 import System.IO  hiding (openFile)
+import System.IO.Unsafe (unsafePerformIO)
 import GHC.Base (unsafeChr)
 
 import Files
@@ -390,6 +391,14 @@ class FastBufferData a where
 
 -- Любая инстанция класса Storable автоматически становится инстанцией класса FastBufferData:
 -- мы знаем, сколько данные такого типа занимают байт, и как записать их в память/прочитать из памяти
+-- |FreeArc/Arc.exe 0.67 32-bit archives write Int and CTime using the native Storable
+-- stride — 4 bytes on x86 (not 8). DArc x64 defaults to a fixed 8-byte layout. When
+-- --arc-32bit-legacy is set, the Int/CTime reader consumes 4 bytes with stride 4 so
+-- directories produced by Arc.exe 0.67 can be decoded. Set via --arc-32bit-legacy.
+legacy32bitRead :: IORef Bool
+legacy32bitRead = unsafePerformIO (newIORef False)
+{-# NOINLINE legacy32bitRead #-}
+
 #ifndef __MHS__
 instance (Storable a) => FastBufferData a where
   maxSizeOf = sizeOf
@@ -417,13 +426,20 @@ instance FastBufferData Word64 where
   maxSizeOf _ = 8
   writeUnchecked buf x pos = do { pokeByteOff buf pos x; return (pos + 8) }
   readUnchecked  buf pos   = do { x <- peekByteOff buf pos; return (x, pos + 8) }
+readIntCompat :: Ptr CChar -> Int -> IO (Int, Int)
+readIntCompat buf pos = do
+  legacy <- readIORef legacy32bitRead
+  if legacy
+    then do (x :: Int32) <- peekByteOff buf pos; return (fromIntegral x, pos + 4)
+    else do (x :: Int64) <- peekByteOff buf pos; return (fromIntegral x, pos + 8)
+
 instance FastBufferData Int where
   -- Int is serialized as a 64-bit little-endian value for cross-platform
   -- compatibility. Native Int width varies (4 on Win32, 8 on x64), so raw
   -- poke/peek would produce different on-disk layouts.
   maxSizeOf _ = 8
   writeUnchecked buf x pos = do { pokeByteOff buf pos (fromIntegral x :: Int64); return (pos + 8) }
-  readUnchecked  buf pos   = do { (x :: Int64) <- peekByteOff buf pos; return (fromIntegral x, pos + 8) }
+  readUnchecked  buf pos   = readIntCompat buf pos
 instance FastBufferData Int32 where
   maxSizeOf _ = 4
   writeUnchecked buf x pos = do { pokeByteOff buf pos x; return (pos + 4) }
@@ -581,7 +597,7 @@ instance BufferData CSize where
 instance FastBufferData CTime where
   maxSizeOf _ = 8
   writeUnchecked buf (CTime x) pos = do { pokeByteOff buf pos (fromIntegral x :: Int64); return (pos + 8) }
-  readUnchecked  buf pos   = do { (x :: Int64) <- peekByteOff buf pos; return (CTime (fromIntegral x), pos + 8) }
+  readUnchecked  buf pos   = do { (x, pos') <- readIntCompat buf pos; return (CTime (fromIntegral x), pos') }
 instance BufferData CTime where
   write     = writeFast; writeList = writeListFast
   read      = readFast;  readList  = readListFast

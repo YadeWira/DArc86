@@ -64,6 +64,11 @@ isFastDecMethod          =  not . any_function [(=="ppmd"), (=="ppmm"), (=="pmm"
 isEXTERNAL_Method        =  CompressionLib.compressionIs "external?"
 -- |Метод шифрования.
 isEncryption             =  CompressionLib.compressionIs "encryption?"
+-- |Non-solid method — каждый блок сжимается независимо (0.67).
+isNonSolidMethod         =  CompressionLib.compressionIs "nosolid?"
+-- |Memory barrier для цепочки методов сжатия (0.67): метод разбивает учёт памяти на независимые кластеры.
+isMemoryBarrier_Compression    =  any_function [isEXTERNAL_Method, CompressionLib.compressionIs "MemoryBarrierCompression?"]
+isMemoryBarrier_Decompression  =  any_function [isEXTERNAL_Method, CompressionLib.compressionIs "MemoryBarrierDecompression?"]
 
 
 -- |Последовательность алгоритмов сжатия, используемых для обработки данных
@@ -461,19 +466,19 @@ builtinMethodSubsts = [
     , ""
     , ";Binary files compression with fast decompression"
     , "1xb = 4x4:tor:3"
-    , "2xb = 4x4:b16m:tor:16m:h64m"
+    , "2xb = 4x4:tor:6"
     , "#xb = delta + #binary"
     , ""
     , ";Binary files compression with fast decompression"
     , "1binary = tor:3"
-    , "2binary = tor:  96m:h64m"
+    , "2binary = tor:6"
     , "3binary = 4x4:b8m:lzma:8m:h64m:fast:mc8"
     , "4binary = 4x4:b16m:lzma:16m:h64m:normal:mc16"
     , "5binary = 4x4:b16m:lzma:16m:max"
     , "6binary = 4x4:b32m:lzma:32m:max"
-    , "7binary = 4x4:b32m:lzma:32m:max"
-    , "8binary = 4x4:b64m:lzma:64m:max"
-    , "9binary = 4x4:b64m:lzma:64m:max"
+    , "7binary = 4x4:b64m:lzma:64m:max"
+    , "8binary = 4x4:b128m:lzma:128m:max"
+    , "9binary = 4x4:b254m:lzma:254m:max"
     , ""
     , ";Synonyms"
     , "bcj = exe"
