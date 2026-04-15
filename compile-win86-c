@@ -37,6 +37,13 @@ build() {
   case "$src" in
     */_Encryption/*) extra=("-I$SRC_ROOT_WIN\\Shared_src\\_Encryption\\headers" "-I$SRC_ROOT_WIN\\Compression\\_Encryption\\headers") ;;
   esac
+  # PPMD must match Linux makefile exactly (Compression/PPMD/makefile): -O1,
+  # -fstrict-aliasing, -fno-exceptions/-fno-rtti, -fomit-frame-pointer, -funroll-loops.
+  # Any mismatch on the WORD&-alias SWAP pattern in Model.cpp produces cross-
+  # incompatible PPMD streams (Linux↔arc86 archives differ and fail to decode).
+  case "$src" in
+    */PPMD/*) extra+=(-O1 -fstrict-aliasing -fno-exceptions -fno-rtti -fomit-frame-pointer -funroll-loops) ;;
+  esac
   case "$src" in
     */CLS/*) echo "  skip: $src (CLS host/plugin)"; return 0 ;;
   esac
@@ -56,6 +63,38 @@ done
 
 for src in Compression/*/C_*.cpp; do
   [[ -f $src ]] && build "$src"
+done
+
+# LZMA 7-Zip 24.09 C SDK sources — compiled via wine-hosted msvcrt gcc.
+CC_C="wine $GHC_WIN_ROOT/mingw/bin/gcc.exe"
+C7Z_FLAGS=(
+  -std=c11 -c -O2 -DNDEBUG -D_REENTRANT
+  -DFREEARC_WIN -DFREEARC_INTEL_BYTE_ORDER
+  -D_WIN32_WINNT=0x0601 -DWINVER=0x0601
+  -Wno-unknown-pragmas -Wno-sign-compare -Wno-deprecated-declarations
+)
+for src in Compression/LZMA/7z24/*.c; do
+  [[ -f $src ]] || continue
+  base=$(basename "$src" .c)
+  echo "  $src"
+  $CC_C "${C7Z_FLAGS[@]}" "$(winpath "$(readlink -f "$src")")" -o "$WINOUT_WIN\\$base.o" 2>&1 | \
+    grep -vE "^[0-9a-f]+:fixme:|^[0-9a-f]+:stub|server_get_file_info" || true
+done
+
+# 7z native reader SDK (sdk_ prefix to avoid colliding with LZMA/7z24 objects)
+SDK7Z_INC="$(winpath "$(readlink -f Compression/7z/sdk)")"
+for src in Compression/7z/C_7z.c; do
+  [[ -f $src ]] || continue
+  echo "  $src"
+  $CC_C "${C7Z_FLAGS[@]}" "-I$SDK7Z_INC" "$(winpath "$(readlink -f "$src")")" -o "$WINOUT_WIN\\C_7z.o" 2>&1 | \
+    grep -vE "^[0-9a-f]+:fixme:|^[0-9a-f]+:stub|server_get_file_info" || true
+done
+for src in Compression/7z/sdk/*.c; do
+  [[ -f $src ]] || continue
+  base=$(basename "$src" .c)
+  echo "  $src"
+  $CC_C "${C7Z_FLAGS[@]}" "-I$SDK7Z_INC" "$(winpath "$(readlink -f "$src")")" -o "$WINOUT_WIN\\sdk_$base.o" 2>&1 | \
+    grep -vE "^[0-9a-f]+:fixme:|^[0-9a-f]+:stub|server_get_file_info" || true
 done
 
 echo "Built: $(ls "$WINOUT"/*.o 2>/dev/null | wc -l) objects in $WINOUT/"
