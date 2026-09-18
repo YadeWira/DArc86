@@ -1,6 +1,24 @@
-# DArc86
+# DArc86 — archived
 
-**DArc86** is the 32-bit Windows port of [DArc](https://github.com/YadeWira/DArc) — a command-line archiver derived from [FreeArc](http://freearc.org) — targeted at legacy **Windows 7 / 8 / 10 (x86)** systems.
+> **This repository is archived and no longer maintained.** Use
+> [DArc](https://github.com/DavidLee18/DArc) instead.
+>
+> DArc86 was the 32-bit Windows port of the Haskell/C++ DArc, and it stopped at
+> upstream commit `c9e207d` (April 2026). DArc has since been rewritten end to
+> end in Rust: there is no Haskell and no C or C++ left in its tree, the console
+> binary is `darc`, and it builds from one source tree for every target it
+> supports.
+>
+> **32-bit is not a separate codebase any more.** The Rust tree cross-compiles
+> to `i686-pc-windows-gnu` (Windows 10+ x86) and to `i686-win7-windows-gnu`
+> (verified running on a real Windows 7 SP1), producing archives byte-identical
+> to the x86_64 build's. Everything this repository existed to provide is a
+> build target there.
+>
+> What lives on here is history, and the FreeArc-lineage Haskell and C++ sources
+> as they stood at `c9e207d`.
+
+**DArc86** was the 32-bit Windows port of [DArc](https://github.com/YadeWira/DArc) — a command-line archiver derived from [FreeArc](http://freearc.org) — targeted at legacy **Windows 7 / 8 / 10 (x86)** systems.
 
 Built via **Wine + GHC 8.6.5 i386**, the last GHC bindist that supports 32-bit Windows. The resulting binary is `arc86.exe` (PE32, Intel i386).
 
@@ -10,10 +28,20 @@ Built via **Wine + GHC 8.6.5 i386**, the last GHC bindist that supports 32-bit W
 
 ## Archive format compatibility
 
-The wire format is **100% compatible** between DArc86, DArc (64-bit), and FreeArc 0.67:
+> **This section describes DArc as it was at `c9e207d`, and is no longer true of
+> current DArc.** Upstream has since stated that compatibility with DArc86 is
+> *not* a design requirement, and has taken deliberate divergences where it
+> conflicts with being correct. The one that bites first: **encrypted archives
+> are not interchangeable.** Current DArc writes `:h1` in the encryption method
+> because the old key/IV hex decoding was broken — `char2int` was missing its
+> `+10`, folding the key's 16 hex values onto 10 and costing roughly 208 bits of
+> a nominally 256-bit AES key. DArc86 cannot read a `:h1` archive, and an
+> archive DArc86 writes carries the weakened key.
 
-- Archives produced by DArc86 can be read by DArc, FreeArc 0.67 (32-bit legacy) and older.
-- Archives produced by DArc / FreeArc 0.67 can be read by DArc86.
+The wire format was **100% compatible** between DArc86, DArc (64-bit) and FreeArc 0.67:
+
+- Archives produced by DArc86 can be read by DArc up to `c9e207d`, FreeArc 0.67 (32-bit legacy) and older.
+- Archives produced by DArc up to `c9e207d` / FreeArc 0.67 can be read by DArc86.
 - For round-tripping with **FreeArc 0.67 32-bit legacy archives**, pass `--arc-32bit-legacy`.
 
 ---
