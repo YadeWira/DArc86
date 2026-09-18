@@ -9,14 +9,26 @@
 > binary is `darc`, and it builds from one source tree for every target it
 > supports.
 >
-> **32-bit is not a separate codebase any more.** The Rust tree cross-compiles
-> to `i686-pc-windows-gnu` (Windows 10+ x86) and to `i686-win7-windows-gnu`
+> **32-bit is no longer a separate codebase.** The Rust tree cross-compiles to
+> `i686-pc-windows-gnu` (Windows 10+ x86) and to `i686-win7-windows-gnu`
 > (verified running on a real Windows 7 SP1), producing archives byte-identical
-> to the x86_64 build's. Everything this repository existed to provide is a
-> build target there.
+> to the x86_64 build's.
 >
-> What lives on here is history, and the FreeArc-lineage Haskell and C++ sources
-> as they stood at `c9e207d`.
+> **One thing this repository still does that current DArc does not: large
+> files on 32-bit.** FreeArc reads each file in chunks from a bounded buffer
+> pool sized by `--cache` (`ArcvProcessRead.hs`, `Cmdline.hs`), so memory is
+> bounded by the cache and not by the data — which is how a 32-bit binary
+> archived files far larger than its own address space. The Rust port reads
+> each file whole and builds the archive in memory (its own source says so at
+> `darc-arc/src/bin/darc.rs`: "`--cache` sizes a read-ahead buffer this port
+> does not have"). Measured, its peak RSS is linear at 6–7x the input: a 5 GB
+> file peaks at 29.8 GB, and the 32-bit build takes 300 MB but fails at 400 MB
+> with `memory allocation of 800001606 bytes failed`. Until that pipeline is
+> streamed, use this repository's `arc86.exe` for 32-bit work on files above
+> roughly 300 MB.
+>
+> What else lives on here is history, and the FreeArc-lineage Haskell and C++
+> sources as they stood at `c9e207d`.
 
 **DArc86** was the 32-bit Windows port of [DArc](https://github.com/YadeWira/DArc) — a command-line archiver derived from [FreeArc](http://freearc.org) — targeted at legacy **Windows 7 / 8 / 10 (x86)** systems.
 
